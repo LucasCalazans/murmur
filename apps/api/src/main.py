@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import auth as auth_routes
 from src.api.routes import debug as debug_routes
+from src.api.routes import notes as notes_routes
 from src.core.config import get_settings, validate_clerk_config
 from src.core.logging import init_logging, install_request_logging
 from src.services.llm import LLMConfigError, validate_llm_config
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     install_request_logging(app)
 
     app.include_router(auth_routes.router)
+    app.include_router(notes_routes.router)
     if settings.app_env != "production":
         app.include_router(debug_routes.router)
 
