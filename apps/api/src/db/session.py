@@ -1,13 +1,14 @@
 """AsyncEngine + sessionmaker globais.
 
-Padrão alinhado com o `prism`: uma engine, sessionmaker singleton e função
-`get_session` async-context-manager para uso fora de FastAPI.
+Usa `sqlmodel.ext.asyncio.session.AsyncSession` (wrapper sobre o do SQLAlchemy)
+porque ela expõe `.exec()` integrando com queries do SQLModel.
 """
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.core.config import get_settings
 
@@ -16,7 +17,7 @@ settings = get_settings()
 
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.app_env == "development" and False,  # ligar pra debugar SQL
+    echo=False,  # ligar pra debugar SQL
     pool_pre_ping=True,
 )
 

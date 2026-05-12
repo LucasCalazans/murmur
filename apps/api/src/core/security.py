@@ -51,14 +51,16 @@ async def authenticate(request: Request) -> ClerkIdentity:
     )
 
     if not request_state.is_signed_in or request_state.payload is None:
+        reason = request_state.reason
+        # `reason` é um enum AuthErrorReason (não-serializável em JSON) — coerção pra str.
+        message = (
+            getattr(reason, "message", None)
+            or (str(reason) if reason is not None else None)
+            or "Sessão inválida ou expirada."
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": {
-                    "code": "unauthenticated",
-                    "message": request_state.reason or "Sessão inválida ou expirada.",
-                }
-            },
+            detail={"error": {"code": "unauthenticated", "message": message}},
         )
 
     payload: dict = dict(request_state.payload)
