@@ -32,6 +32,11 @@ def create_app() -> FastAPI:
         version="0.1.0",
     )
 
+    # IMPORTANTE: middleware adicionado por último vira o OUTERMOST. Pra que
+    # respostas 5xx geradas pelo Starlette (exceções não-pegas) também levem
+    # headers CORS, o CORSMiddleware tem que ser o último adicionado.
+    install_request_logging(app)
+
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
@@ -40,8 +45,6 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
         expose_headers=["X-Request-Id"],
     )
-
-    install_request_logging(app)
 
     app.include_router(auth_routes.router)
     app.include_router(notes_routes.router)

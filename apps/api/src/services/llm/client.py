@@ -254,7 +254,9 @@ class LLMClient:
                         and getattr(exc, "status_code", None) == 529
                     ):
                         raise LLMOverloadedError(str(exc)) from exc
-                    raise
+                    # Qualquer outra exceção do LiteLLM (auth, bad request, timeout,
+                    # etc.) vira LLMError pra ser tratada uniformemente pelos call sites.
+                    raise LLMError(f"{type(exc).__name__}: {exc}") from exc
                 wait = _parse_retry_after(exc)
                 logger.info(
                     "%s: transient LLM error (%s), sleeping %.1fs (%d/%d)",
