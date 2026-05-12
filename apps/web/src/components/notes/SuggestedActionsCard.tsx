@@ -222,26 +222,34 @@ export function SuggestedActionsCard({ noteId }: Props) {
                   </div>
                 </div>
                 <div className="flex items-center gap-0.5 shrink-0">
-                  {!done && (
-                    <button
-                      onClick={() => setStatus(action, 'done')}
-                      className="p-1.5 rounded text-zinc-500 hover:text-emerald-400 hover:bg-zinc-800"
-                      title="Marcar como concluída"
-                      aria-label="Marcar como concluída"
-                    >
-                      <Check size={14} />
-                    </button>
-                  )}
-                  {!dismissed && (
-                    <button
-                      onClick={() => setStatus(action, 'dismissed')}
-                      className="p-1.5 rounded text-zinc-500 hover:text-amber-400 hover:bg-zinc-800"
-                      title="Dispensar"
-                      aria-label="Dispensar"
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => setStatus(action, done ? 'pending' : 'done')}
+                    className={cn(
+                      'p-1.5 rounded hover:bg-zinc-800 transition-colors',
+                      done
+                        ? 'text-emerald-400 hover:text-zinc-400'
+                        : 'text-zinc-500 hover:text-emerald-400',
+                    )}
+                    title={done ? 'Desmarcar (voltar pra pendente)' : 'Marcar como concluída'}
+                    aria-label={done ? 'Desmarcar' : 'Marcar como concluída'}
+                    aria-pressed={done}
+                  >
+                    <Check size={14} />
+                  </button>
+                  <button
+                    onClick={() => setStatus(action, dismissed ? 'pending' : 'dismissed')}
+                    className={cn(
+                      'p-1.5 rounded hover:bg-zinc-800 transition-colors',
+                      dismissed
+                        ? 'text-amber-400 hover:text-zinc-400'
+                        : 'text-zinc-500 hover:text-amber-400',
+                    )}
+                    title={dismissed ? 'Restaurar (voltar pra pendente)' : 'Dispensar'}
+                    aria-label={dismissed ? 'Restaurar' : 'Dispensar'}
+                    aria-pressed={dismissed}
+                  >
+                    <X size={14} />
+                  </button>
                   <button
                     onClick={() => handleDelete(action)}
                     className="p-1.5 rounded text-zinc-500 hover:text-red-400 hover:bg-zinc-800"
