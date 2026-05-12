@@ -10,6 +10,7 @@ from src.api.routes import audio as audio_routes
 from src.api.routes import auth as auth_routes
 from src.api.routes import debug as debug_routes
 from src.api.routes import notes as notes_routes
+from src.api.routes import suggested_actions as actions_routes
 from src.api.routes import transcripts as transcripts_routes
 from src.core.config import get_settings, validate_clerk_config
 from src.core.logging import init_logging, install_request_logging
@@ -47,6 +48,8 @@ def create_app() -> FastAPI:
     app.include_router(audio_routes.router)
     app.include_router(transcripts_routes.audio_router)
     app.include_router(transcripts_routes.transcript_router)
+    app.include_router(actions_routes.notes_router)
+    app.include_router(actions_routes.actions_router)
     if settings.app_env != "production":
         app.include_router(debug_routes.router)
 

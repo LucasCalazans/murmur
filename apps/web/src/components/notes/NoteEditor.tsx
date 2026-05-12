@@ -8,6 +8,7 @@ import { AudioRecorder } from '@/components/audio/AudioRecorder'
 import { AudioUpload } from '@/components/audio/AudioUpload'
 import { TranscriptCard } from '@/components/audio/TranscriptCard'
 import { MarkdownEditor } from '@/components/notes/MarkdownEditor'
+import { SuggestedActionsCard } from '@/components/notes/SuggestedActionsCard'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -97,8 +98,9 @@ export function NoteEditor({ id }: { id: string }) {
 
       <MarkdownEditor value={content} onChange={setContent} />
 
-
       <NoteAudioSection noteId={id} />
+
+      <SuggestedActionsCard noteId={id} />
     </div>
   )
 }
