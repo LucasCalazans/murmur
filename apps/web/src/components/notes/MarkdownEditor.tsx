@@ -4,6 +4,7 @@ import { useUndoRedo } from '@/hooks/useUndoRedo'
 import { cn } from '@/lib/utils'
 import { BubbleToolbar } from './BubbleToolbar'
 import { EditorToolbar, type ToolbarCommand } from './EditorToolbar'
+import { handleListEnter, handleListTab } from './list-behavior'
 import { MarkdownPreview } from './MarkdownPreview'
 import {
   applyEdit,
@@ -116,6 +117,39 @@ export function MarkdownEditor({ value, onChange, placeholder }: Props) {
   )
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    const ta = textareaRef.current
+    if (!ta) return
+
+    // Comportamento de lista — Enter continua o item, item vazio sai da lista.
+    if (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const state: EditState = {
+        value: ta.value,
+        selectionStart: ta.selectionStart,
+        selectionEnd: ta.selectionEnd,
+      }
+      const result = handleListEnter(state)
+      if (result) {
+        e.preventDefault()
+        commitProgrammaticEdit(result)
+        return
+      }
+    }
+
+    // Tab / Shift+Tab — aninha/desaninha item da lista.
+    if (e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const state: EditState = {
+        value: ta.value,
+        selectionStart: ta.selectionStart,
+        selectionEnd: ta.selectionEnd,
+      }
+      const result = handleListTab(state, e.shiftKey)
+      if (result) {
+        e.preventDefault()
+        commitProgrammaticEdit(result)
+        return
+      }
+    }
+
     const meta = e.metaKey || e.ctrlKey
     if (!meta) return
     const key = e.key.toLowerCase()
