@@ -22,9 +22,11 @@ dependencies = [
   "psycopg[binary]>=3.2.0",           # driver síncrono (usado pelo alembic)
   "greenlet>=3.0.0",
 
-  # Autenticação
-  "passlib[bcrypt]>=1.7.4",           # hash de senha
-  "pyjwt[crypto]>=2.8.0",             # JWT (assinatura RS256 ou HS256)
+  # Autenticação — Clerk como provider gerenciado (SaaS).
+  # SDK oficial cobre verificação de session token e chamadas server-side à API.
+  "clerk-backend-api>=5.0.0",
+  # Webhooks da Clerk usam assinatura Svix; mantemos preparado pra sincronizar usuários.
+  "svix>=1.30.0",
 
   # LLM — camada plugável (replica padrão do prism)
   "litellm>=1.50.0",                  # roteia Anthropic/OpenAI/Gemini etc.

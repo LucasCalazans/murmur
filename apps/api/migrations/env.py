@@ -11,6 +11,10 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlmodel import SQLModel
+
+# Importa todos os modelos para popular SQLModel.metadata.
+import src.db.models  # noqa: F401
 
 config = context.config
 
@@ -22,8 +26,7 @@ database_url = os.getenv("DATABASE_URL_SYNC")
 if database_url:
     config.set_main_option("sqlalchemy.url", database_url)
 
-# Fase 1 substituirá por `target_metadata = SQLModel.metadata` após importar os modelos.
-target_metadata = None
+target_metadata = SQLModel.metadata
 
 
 def run_migrations_offline() -> None:

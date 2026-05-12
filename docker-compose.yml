@@ -37,11 +37,12 @@ services:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-murmur}:${POSTGRES_PASSWORD:-murmur_dev}@postgres:5432/${POSTGRES_DB:-murmur}
       DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-murmur}:${POSTGRES_PASSWORD:-murmur_dev}@postgres:5432/${POSTGRES_DB:-murmur}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
-      # Auth
-      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
-      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
-      JWT_ACCESS_TTL_MIN: ${JWT_ACCESS_TTL_MIN:-15}
-      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
+      # Auth — Clerk (SaaS gerenciado).
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:-}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:-}
+      CLERK_AUTHORIZED_PARTIES: ${CLERK_AUTHORIZED_PARTIES:-http://localhost:5173}
+      CLERK_WEBHOOK_SECRET: ${CLERK_WEBHOOK_SECRET:-}
+      OWNER_EMAIL: ${OWNER_EMAIL:-calazans95@hotmail.com}
       # LLM
       LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}

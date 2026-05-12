@@ -118,8 +118,8 @@ murmur/
 │           │   │   ├── config.py   # SUPPORTED_PROVIDERS, resolve_model
 │           │   │   └── exceptions.py
 │           │   ├── transcription/  # faster-whisper wrapper
-│           │   ├── analysis/       # Pipeline: transcript → análise via LLM
-│           │   └── auth/           # Lógica de auth (hash, JWT, sessões)
+│           │   └── analysis/       # Pipeline: transcript → análise via LLM
+│           │   # (auth/ vazio — Clerk SDK em core/security.py cobre tudo)
 │           └── utils/              # helpers diversos
 │
 └── packages/
@@ -200,7 +200,7 @@ npm run down
 
 ## Roadmap
 
-### Fase 0 — Estrutura inicial ✅ (concluída em 2026-05-12)
+### Fase 0 — Estrutura inicial ✅ (concluída e pushada em 2026-05-12)
 - [x] Estrutura monorepo (`apps/web`, `apps/api`, `packages/`)
 - [x] `docker-compose.yml` com **postgres + api** (backend em Docker, frontend no host)
 - [x] `apps/api/Dockerfile` (multi-stage: base → deps → dev / prod)
@@ -219,31 +219,37 @@ npm run down
 - [x] Build inicial: `docker compose build api` + `npm install`
 - [x] Smoke test: `curl http://localhost:3001/health` → `{"status":"ok","service":"murmur-api","env":"development"}`
 - [x] Typecheck do frontend (`tsc --noEmit`) passa
-- [x] Primeiro commit: `feat: bootstrap monorepo murmur (web + api docker)` (54 arquivos, root-commit)
-- [ ] **Push ainda não foi feito** — `git push -u origin main` quando o usuário quiser
+- [x] Primeiro commit + push: `feat: bootstrap monorepo murmur (web + api docker)` (54 arquivos, root-commit)
 
-### Fase 1 — Backend: bootstrap + auth
-- [ ] `main.py` (FastAPI app + CORS + error handlers)
-- [ ] `core/config.py` (Settings com pydantic-settings)
-- [ ] `db/session.py` + Alembic configurado
-- [ ] Modelos: `User`, `RefreshToken`, `NoteShare`
-- [ ] Migration inicial
-- [ ] Endpoints: `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`
-- [ ] Deps: `get_current_user`, `require_role(*roles)`
-- [ ] Seed: criar usuário `owner` (eu)
+### Fase 1 — Auth via Clerk ⏳ (em andamento — esperando o usuário criar o app na Clerk)
+**Decisão (2026-05-12):** auth gerenciada pela Clerk em vez de implementação própria. Razão: o usuário não quer lidar com segurança em produção. Free tier (Hobby) cobre o uso pessoal com folga (50k MRU/app, apps ilimitadas).
+
+Implementação:
+- [x] `core/config.py` (Settings com pydantic-settings — Clerk, DB, LLM, Whisper)
+- [x] `core/security.py` (`authenticate()` via `clerk_backend_api.authenticate_request_async`)
+- [x] `db/session.py` (AsyncEngine + sessionmaker)
+- [x] `db/models/user.py` (`User`: id, clerk_user_id UNIQUE, email, role, ts; enum `UserRole`)
+- [x] `migrations/env.py` puxa `SQLModel.metadata`; `script.py.mako` agora inclui `import sqlmodel`
+- [x] Migration `5759fdf77f11_init_users` aplicada (tabela `users` + índices)
+- [x] `api/deps.py` (`get_db`, `get_clerk_identity`, `get_current_user` com lazy-upsert, `require_role(*roles)`)
+- [x] `api/routes/auth.py` (`GET /auth/me`)
+- [x] `main.py` plugando router e validando config no boot
+- [x] Frontend: `@clerk/clerk-react` instalado; `<ClerkProvider>` em `main.tsx`; rotas `/sign-in` e `/sign-up`; `<UserButton>` no header; `useApi()` hook em `lib/api.ts` que injeta Bearer JWT
+- [ ] **Usuário precisa criar app na Clerk e preencher chaves** (passos detalhados em "Próximo chat" abaixo)
+- [ ] Smoke test ponta a ponta: signup pela UI → `/auth/me` retorna `User` com role correta
+- [ ] Webhook `user.deleted` (sync) — adiar pra Fase 1.1 (precisa de túnel pra dev)
 
 ### Fase 2 — Camada LLM
 - [ ] Portar `services/llm/{client,config,exceptions}.py` do prism
 - [ ] Validação no startup do FastAPI
 - [ ] Smoke test: `POST /debug/llm` (apenas em dev) para validar configuração
 
-### Fase 3 — Frontend: shell + auth
-- [ ] Setup Vite + Tailwind + React Router
-- [ ] Componentes UI primitivos
-- [ ] `AuthContext` + hook `useAuth`
-- [ ] Páginas Login/Register
-- [ ] `ProtectedRoute`
-- [ ] Layout (sidebar + topbar) com info do usuário e logout
+### Fase 3 — Frontend: shell + app
+*(Auth UI já entrou na Fase 1 via `@clerk/clerk-react` — `<SignIn/>`, `<SignUp/>`, `<UserButton/>`).*
+- [ ] Componentes UI primitivos (Button, Input, Card, Dialog) na pasta `components/ui/`
+- [ ] Layout autenticado (sidebar + topbar) — usar `<SignedIn>` e `useUser()` da Clerk pra exibir info
+- [ ] `ProtectedRoute` baseado em `<SignedIn/>` (redireciona pra `/sign-in` se não logado)
+- [ ] Página Dashboard (placeholder) com link pras notas (Fase 4)
 
 ### Fase 4 — Notas (CRUD)
 - [ ] Modelo `Note` (id, owner_id, title, content, tags, timestamps)
@@ -286,54 +292,18 @@ npm run down
 
 ## Variáveis de Ambiente
 
-### Raiz (`.env` — opcional, lido pelo docker-compose)
-```
-POSTGRES_USER=murmur
-POSTGRES_PASSWORD=murmur_dev
-POSTGRES_DB=murmur
-POSTGRES_PORT=5432
-```
+Veja os arquivos `.env.example` para a lista completa. Os essenciais para subir o dev:
 
-### `apps/api/.env`
-```
-# App
-APP_ENV=development
-APP_PORT=3001
-CORS_ORIGIN=http://localhost:5173
+### Raiz (`.env` — lido pelo docker-compose)
+- `POSTGRES_{USER,PASSWORD,DB,PORT}` (port `5433` no host)
+- `CLERK_SECRET_KEY` + `CLERK_PUBLISHABLE_KEY` + `CLERK_AUTHORIZED_PARTIES`
+- `OWNER_EMAIL` (default `calazans95@hotmail.com` — promovido a `role=owner` no primeiro login)
+- `ANTHROPIC_API_KEY` (Fase 2+)
+- `WHISPER_*` (Fase 6+)
 
-# Banco
-DATABASE_URL=postgresql+asyncpg://murmur:murmur_dev@localhost:5432/murmur
-DATABASE_URL_SYNC=postgresql+psycopg://murmur:murmur_dev@localhost:5432/murmur
-
-# Auth
-JWT_SECRET=<gerar com `openssl rand -hex 32`>
-JWT_ALGORITHM=HS256
-JWT_ACCESS_TTL_MIN=15
-JWT_REFRESH_TTL_DAYS=7
-
-# LLM (plugável)
-LLM_PROVIDER=anthropic                    # anthropic | openai | ollama
-LLM_MODEL=claude-sonnet-4-6                # ou gpt-4o-mini, llama3.1:8b, etc.
-ANTHROPIC_API_KEY=<sua chave>
-OPENAI_API_KEY=<opcional>
-OLLAMA_BASE_URL=http://localhost:11434     # se usar Ollama
-OLLAMA_MODEL=llama3.1:8b
-
-# Transcrição (faster-whisper)
-WHISPER_MODEL_SIZE=base                    # tiny|base|small|medium|large-v3
-WHISPER_DEVICE=cpu                         # cpu|cuda
-WHISPER_COMPUTE_TYPE=int8                  # int8|float16|float32
-WHISPER_LANGUAGE=pt                        # ou auto
-
-# Armazenamento
-AUDIO_STORAGE_PATH=./storage/audio
-MAX_AUDIO_SIZE_MB=100
-```
-
-### `apps/web/.env`
-```
-VITE_API_URL=http://localhost:3001
-```
+### `apps/web/.env.local`
+- `VITE_API_URL=http://localhost:3001`
+- `VITE_CLERK_PUBLISHABLE_KEY=pk_test_...`
 
 ---
 
@@ -352,66 +322,79 @@ VITE_API_URL=http://localhost:3001
 
 - **Última atualização:** 2026-05-12
 - **Nome do projeto:** **Murmur**
-- **Repo remoto:** `git@github.com:LucasCalazans/murmur.git` — conectado, commit local criado, **push pendente** (root-commit `feat: bootstrap monorepo murmur (web + api docker)`).
-- **Fase ativa:** Fase 0 ✅ concluída → próxima é **Fase 1 (auth + permissões)**.
+- **Repo remoto:** `git@github.com:LucasCalazans/murmur.git` — `main` pushada.
+- **Fase ativa:** Fase 1 (auth via Clerk) — código todo escrito; falta o usuário criar a app na Clerk, preencher as chaves no `.env` e fazer o smoke test ponta a ponta.
+- **Decisão de auth (2026-05-12):** Clerk (SaaS). Razão: usuário não quer lidar com segurança em produção. Free tier cobre o uso (50k MRU/app, apps ilimitadas).
 - **Portas em uso no host (dev):**
   - `5173` — Vite (frontend)
   - `3001` — FastAPI (no container `murmur-api`)
-  - `5433` — Postgres (no container `murmur-postgres`) — `5432` está ocupado por outro container (`youtube-shorts-postgres`), por isso o host port foi remapeado pra **5433** no `.env`. Conexão de dentro do compose continua em `postgres:5432`.
+  - `5433` — Postgres (no container `murmur-postgres`) — `5432` está ocupado por outro container, por isso o host port foi remapeado.
 
-### O que foi feito nesta sessão (2026-05-12, segunda rodada)
-1. **Git inicializado** + branch `main` + remote `origin` apontando pro GitHub.
-2. **Configs do frontend criados:** Vite, Tailwind, TypeScript (com `tsconfig.node.json`), ESLint, PostCSS, `index.html`, `main.tsx`, `App.tsx` com fetch do `/health`, `globals.css`, `vite-env.d.ts`, `.env.example`.
-3. **Configs do backend criados:** `alembic.ini`, `migrations/env.py` (lê `DATABASE_URL_SYNC` do ambiente, `target_metadata = None` por enquanto), `migrations/script.py.mako`, `apps/api/.env.example`, `src/main.py` (FastAPI minimal com CORS + `/health`).
-4. **`__init__.py`** em toda árvore de pacotes Python (`src/{api,api/routes,core,db,db/models,middleware,schemas,services,services/{llm,auth,transcription,analysis},utils}`).
-5. **`.gitkeep`** em todas as pastas vazias do frontend (components, pages, hooks, lib, contexts, types, routes, styles).
-6. **`.gitignore` ajustado** — `models/` virou `/models/` para não capturar `apps/api/src/db/models/`. Adicionado `*.ckpt`, `*.safetensors`.
-7. **Postgres realocado pro host port 5433** (`5432` ocupado por outro projeto local).
-8. **`.env` real criado** a partir do `.env.example` com `JWT_SECRET` gerado via `openssl rand -hex 32`.
-9. **`docker compose build api`** ✅ (Python 3.11 slim + ffmpeg + libgomp1; instalou TODAS as deps incluindo faster-whisper, anthropic, openai, litellm, sqlmodel, alembic, asyncpg, psycopg, passlib[bcrypt], pyjwt).
-10. **`docker compose up -d`** ✅ — postgres e api healthy.
-11. **Smoke test:** `curl http://localhost:3001/health` → `{"status":"ok","service":"murmur-api","env":"development"}`.
-12. **`npm install`** rodou no host (285 packages, alguns warnings de deprecação no eslint v8 e glob — sem impacto agora).
-13. **`tsc --noEmit`** do frontend passa (sem erros).
-14. **Primeiro commit feito** (root-commit, 54 arquivos). **Push ainda não foi feito**.
+### O que foi feito nesta sessão (Fase 1)
+1. **Decisão Clerk** após comparar com FastAPI-Users e build próprio; memória salva em `~/.claude/projects/-home-calazans-projects-murmur/memory/user_auth_preference.md`.
+2. **Backend:**
+   - `pyproject.toml`: trocado `passlib[bcrypt]` + `pyjwt[crypto]` por `clerk-backend-api>=5.0.0` + `svix>=1.30.0`. Imagem rebuilded.
+   - `src/core/config.py`: `Settings` pydantic-settings tipado (Clerk, DB, LLM, Whisper). `validate_clerk_config()` falha em prod sem chaves.
+   - `src/core/security.py`: função `authenticate(request)` async que chama `authenticate_request_async` do SDK Clerk. Retorna `ClerkIdentity` (clerk_user_id, session_id, email, raw_payload). 503 se chave ausente, 401 se token inválido.
+   - `src/db/session.py`: `AsyncEngine` + `async_sessionmaker` lendo `settings.database_url`.
+   - `src/db/models/user.py`: `User` (id UUID, clerk_user_id UNIQUE, email, role enum, created_at, updated_at). `UserRole` enum (`owner`/`editor`/`viewer`).
+   - `src/db/models/__init__.py`: re-exporta `User`, `UserRole`.
+   - `migrations/env.py`: importa `src.db.models` e aponta `target_metadata = SQLModel.metadata`.
+   - `migrations/script.py.mako`: incluído `import sqlmodel` (alembic não inclui sozinho).
+   - Migration `5759fdf77f11_init_users` gerada + aplicada (tabela `users` + 2 índices).
+   - `src/api/deps.py`: `get_db`, `get_clerk_identity`, `get_current_user` (com lazy-upsert da `User` row + promoção do `OWNER_EMAIL` a `owner`), `require_role(*roles)`.
+   - `src/schemas/user.py`: `UserOut` Pydantic.
+   - `src/api/routes/auth.py`: `GET /auth/me` — protegido por `get_current_user`.
+   - `src/main.py`: pluga router e roda `validate_clerk_config()` no boot.
+3. **Frontend:**
+   - `@clerk/clerk-react@^5.61.6` instalado.
+   - `src/main.tsx`: `<ClerkProvider>` com tema dark (verde Murmur) envolvendo tudo. Falha clara se `VITE_CLERK_PUBLISHABLE_KEY` ausente.
+   - `src/lib/api.ts`: hook `useApi()` que retorna axios com interceptor de `Authorization: Bearer <Clerk JWT>`.
+   - `src/App.tsx`: rotas `/sign-in/*`, `/sign-up/*` com componentes da Clerk; home mostra `<UserButton/>` e card chamando `/auth/me`. `<SignedIn>` / `<SignedOut>` controlam o que aparece.
+   - `src/vite-env.d.ts`: tipa `VITE_CLERK_PUBLISHABLE_KEY`.
+4. **Env files atualizados:** `.env.example` (raiz e `apps/api/`) e `apps/web/.env.example` com vars da Clerk. `docker-compose.yml`: removidas vars JWT_*, adicionadas `CLERK_*` e `OWNER_EMAIL`.
+5. **Smoke test backend isolado:** `GET /auth/me` sem chave → 503 com mensagem `clerk_not_configured` clara. Quando a chave estiver no `.env`, 401 (sem token) ou 200 (com token válido).
 
 ### 🎯 Próximo chat — comece exatamente daqui
 
-**1. (Opcional) Fazer o push pro GitHub:**
+A integração Clerk está toda escrita. O bloqueio é criar a app na Clerk e plugar as chaves. Passos pro usuário:
+
+**1. Criar app na Clerk:**
+   1. Abrir https://dashboard.clerk.com.
+   2. "Create application" → nome `Murmur` → escolher providers (Email + Google é o mínimo recomendado).
+   3. Em "API keys": copiar `Publishable key` (pk_test_…) e `Secret key` (sk_test_…).
+
+**2. Plugar as chaves:**
+   - Em `~/projects/murmur/.env` (raiz) preencher: `CLERK_SECRET_KEY=` e `CLERK_PUBLISHABLE_KEY=`. Deixar `CLERK_AUTHORIZED_PARTIES=http://localhost:5173` e `OWNER_EMAIL=calazans95@hotmail.com`.
+   - Criar `~/projects/murmur/apps/web/.env.local` com:
+     ```
+     VITE_API_URL=http://localhost:3001
+     VITE_CLERK_PUBLISHABLE_KEY=pk_test_...
+     ```
+
+**3. Reiniciar stack:**
    ```bash
    cd ~/projects/murmur
-   git push -u origin main
+   docker compose up -d        # api recarrega .env automaticamente
+   npm run dev:web              # Vite na porta 5173
    ```
-   Confirmar com o usuário se ele quer que o repo já fique público. Não rodar sem aprovação explícita.
 
-**2. Entrar na Fase 1 — backend: bootstrap + auth.**
+**4. Smoke test ponta a ponta:**
+   - Abrir http://localhost:5173 → clicar "sign-in" → criar conta com `calazans95@hotmail.com`.
+   - Após login, voltar pra `/` — o card "seu usuário" deve mostrar o JSON com `role: "owner"`.
+   - Se aparecer `role: "editor"`: o token da Clerk não traz email no claim padrão. Solução: dashboard Clerk → JWT Templates → Customize "session" token → adicionar claim `email: {{user.primary_email_address}}` e tentar de novo. Alternativa: rodar uma query manual `UPDATE users SET role='owner' WHERE email='calazans95@hotmail.com';`.
 
-Ordem sugerida:
-   1. `src/core/config.py` — `Settings` com `pydantic-settings` (carrega tudo do ambiente: DB, JWT, LLM, Whisper).
-   2. `src/core/security.py` — hash de senha (passlib/bcrypt) + emissão/validação de JWT (pyjwt, HS256, access+refresh).
-   3. `src/db/session.py` — `AsyncEngine` + `async_sessionmaker[AsyncSession]` lendo `DATABASE_URL`.
-   4. `src/db/models/user.py` (`User`: id, email, password_hash, role, ts), `refresh_token.py`, `note_share.py` (mesmo que ainda não tenha `Note` — placeholder pra schema da tabela).
-   5. **Atualizar `migrations/env.py`** para importar `SQLModel.metadata` (`from src.db.models import *` + `target_metadata = SQLModel.metadata`).
-   6. `alembic revision --autogenerate -m "init users"` (via `npm run db:revision`).
-   7. `npm run db:migrate`.
-   8. `src/api/deps.py` — `get_db`, `get_current_user`, `require_role(*roles)`.
-   9. `src/api/routes/auth.py` — `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`.
-   10. Plugar rotas no `main.py` via `app.include_router(...)`.
-   11. **Seed do usuário owner** (eu): script Python ou endpoint de admin protegido por env var, criando `calazans95@hotmail.com` com role `owner`.
-
-**3. Validar a fase 1 com smoke tests:**
-   - `POST /auth/register` cria usuário, retorna 201.
-   - `POST /auth/login` retorna access+refresh.
-   - `GET /auth/me` com bearer token retorna o usuário.
-   - `POST /auth/refresh` rotaciona refresh, invalida o antigo.
-   - 401 quando token faltando/expirado.
+**5. Quando isso passar → Fase 2 (Camada LLM):**
+   - Abrir `~/projects/prism/backend/src/services/llm/{__init__,client,config,exceptions}.py` e portar **mantendo o padrão** (singleton `llm_client`, `LLMClient.complete()`, `SUPPORTED_PROVIDERS`, exceções próprias, validação no boot). NÃO reescrever do zero.
+   - Endpoint `POST /debug/llm` em dev pra smoke test.
 
 ### ⚠️ Avisos para o próximo chat
-- **Não rodar `pip install` no host** — backend roda em Docker. Toda dep Python vai no `pyproject.toml` e instala no build da imagem.
-- **`npm install` na raiz** — instala só o workspace `apps/web` (o `apps/api` não é workspace npm).
-- **Postgres está em `localhost:5433` no host** (mas em `postgres:5432` dentro da network do compose). Se for criar `.env` para rodar a api fora do container (não recomendado em dev), usar `localhost:5433`.
-- **Camada LLM (Fase 2):** abrir `~/projects/prism/backend/src/services/llm/{__init__,client,config,exceptions}.py` e portar **mantendo o padrão** (singleton `llm_client`, `LLMClient.complete()`, `SUPPORTED_PROVIDERS`, exceções próprias, validação no boot). NÃO reescrever do zero.
+- **Auth = Clerk.** Não sugerir build próprio nem self-hosted. Memória do usuário em `~/.claude/projects/-home-calazans-projects-murmur/memory/`.
+- **Não rodar `pip install` no host** — backend em Docker. Deps Python via `pyproject.toml` + rebuild da imagem.
+- **`npm install` na raiz** — instala só o workspace `apps/web`.
+- **Postgres no host:** `localhost:5433`. Dentro do compose: `postgres:5432`.
+- **SDK Clerk Python:** `clerk-backend-api` v5+. Função canônica: `authenticate_request_async(request, AuthenticateRequestOptions(secret_key=..., authorized_parties=[...]))`. Aceita qualquer objeto com `.headers` — FastAPI Request serve.
+- **Migrations:** Alembic autogen NÃO inclui `import sqlmodel` por padrão. O `script.py.mako` já foi ajustado pra incluir.
 - **Modelo Anthropic padrão:** `claude-sonnet-4-6` (cutoff Jan/2026).
-- **Hot reload do backend:** vem por bind mount do `apps/api/src/` — uvicorn `--reload` pega mudanças do host sem rebuild.
-- **`default_response_class=ORJSONResponse` está deprecado** em FastAPI 0.136 (Pydantic já serializa via orjson direto). Por isso `main.py` não usa.
-- **Em deprecation warnings do npm:** eslint v8 (`apps/web/package.json`) está EOL. Não urgente mas considerar v9+ depois.
+- **Hot reload do backend:** bind mount do `apps/api/src/`. Mudanças em `pyproject.toml` precisam de `docker compose build api`.
+- **eslint v8 EOL:** considerar upgrade v9+ depois.
