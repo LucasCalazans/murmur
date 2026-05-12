@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 
+import { useUndoRedo } from '@/hooks/useUndoRedo'
 import { cn } from '@/lib/utils'
 import { BubbleToolbar } from './BubbleToolbar'
 import { EditorToolbar, type ToolbarCommand } from './EditorToolbar'
@@ -17,6 +18,7 @@ import {
   orderedList,
   quote,
   strikethrough,
+  type EditResult,
   type EditState,
 } from './markdown-commands'
 
@@ -33,16 +35,53 @@ interface Props {
  *  - Painel direito mostra preview ao vivo (react-markdown + GFM).
  *  - Toolbar minimalista no topo com comandos estruturais.
  *  - BubbleToolbar aparece sobre a seleção quando o usuário marca texto.
- *  - Atalhos: ⌘B, ⌘I, ⌘K.
+ *  - Atalhos: ⌘B, ⌘I, ⌘K. Undo/Redo: ⌘Z, ⌘⇧Z, ⌘Y (history próprio).
  */
 export function MarkdownEditor({ value, onChange, placeholder }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [textarea, setTextarea] = useState<HTMLTextAreaElement | null>(null)
 
-  // Mantém um ref nativo + state — state força re-render do BubbleToolbar quando o ref muda.
   useEffect(() => {
     setTextarea(textareaRef.current)
   }, [])
+
+  const applySnapshot = useCallback(
+    (snap: { value: string; selectionStart: number; selectionEnd: number }) => {
+      onChange(snap.value)
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current
+        if (!ta) return
+        ta.focus()
+        ta.setSelectionRange(snap.selectionStart, snap.selectionEnd)
+      })
+    },
+    [onChange],
+  )
+
+  const history = useUndoRedo({ apply: applySnapshot, externalValue: value })
+
+  function handleTextareaChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const next = e.target.value
+    onChange(next)
+    history.record(
+      {
+        value: next,
+        selectionStart: e.target.selectionStart,
+        selectionEnd: e.target.selectionEnd,
+      },
+      // Permite coalescer digitação contínua em um único undo step.
+      true,
+    )
+  }
+
+  function commitProgrammaticEdit(result: EditResult) {
+    onChange(result.value)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) applyEdit(ta, result)
+    })
+    history.record(result, false)
+  }
 
   const runCommand = useCallback(
     (cmd: ToolbarCommand) => {
@@ -55,7 +94,7 @@ export function MarkdownEditor({ value, onChange, placeholder }: Props) {
         selectionEnd: ta.selectionEnd,
       }
 
-      const handlers: Record<ToolbarCommand, (s: EditState) => ReturnType<typeof bold>> = {
+      const handlers: Record<ToolbarCommand, (s: EditState) => EditResult> = {
         bold,
         italic,
         strike: strikethrough,
@@ -70,27 +109,36 @@ export function MarkdownEditor({ value, onChange, placeholder }: Props) {
         image: (s) => image(s),
       }
       const result = handlers[cmd](state)
-      onChange(result.value)
-      // Aguarda re-render pra setar a seleção certinha no DOM.
-      requestAnimationFrame(() => {
-        if (textareaRef.current) {
-          applyEdit(textareaRef.current, result)
-        }
-      })
+      commitProgrammaticEdit(result)
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onChange],
   )
 
-  // Atalhos de teclado.
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     const meta = e.metaKey || e.ctrlKey
     if (!meta) return
+    const key = e.key.toLowerCase()
+
+    // Undo: ⌘Z (mas NÃO ⌘⇧Z)
+    if (key === 'z' && !e.shiftKey) {
+      e.preventDefault()
+      history.undo()
+      return
+    }
+    // Redo: ⌘⇧Z ou ⌘Y
+    if ((key === 'z' && e.shiftKey) || key === 'y') {
+      e.preventDefault()
+      history.redo()
+      return
+    }
+
     const map: Record<string, ToolbarCommand> = {
       b: 'bold',
       i: 'italic',
       k: 'link',
     }
-    const cmd = map[e.key.toLowerCase()]
+    const cmd = map[key]
     if (cmd) {
       e.preventDefault()
       runCommand(cmd)
@@ -104,7 +152,6 @@ export function MarkdownEditor({ value, onChange, placeholder }: Props) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 min-h-[400px]">
-        {/* Painel de edição — clicar em QUALQUER lugar foca o textarea. */}
         <label
           htmlFor="markdown-textarea"
           className="relative flex border-r border-zinc-800 bg-zinc-950 cursor-text"
@@ -113,7 +160,7 @@ export function MarkdownEditor({ value, onChange, placeholder }: Props) {
             id="markdown-textarea"
             ref={textareaRef}
             value={value}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={handleTextareaChange}
             onKeyDown={handleKeyDown}
             placeholder={placeholder ?? 'Comece a escrever em markdown…'}
             spellCheck={false}
@@ -126,7 +173,6 @@ export function MarkdownEditor({ value, onChange, placeholder }: Props) {
           />
         </label>
 
-        {/* Preview */}
         <div className="px-5 py-4 overflow-auto bg-zinc-950">
           <MarkdownPreview content={value} />
         </div>
