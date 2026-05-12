@@ -1,0 +1,62 @@
+[project]
+name = "murmur-api"
+version = "0.1.0"
+description = "Murmur — backend FastAPI: auth, notas, gravação/upload de áudio, transcrição (faster-whisper) e análise (camada LLM plugável)."
+requires-python = ">=3.11"
+
+dependencies = [
+  # Web framework
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.30.0",
+  "python-multipart>=0.0.9",          # uploads de áudio
+
+  # Config / validação
+  "pydantic>=2.0.0",
+  "pydantic-settings>=2.0.0",
+  "python-dotenv>=1.0.0",
+
+  # Banco — Postgres + SQLModel + Alembic (mesmo stack do prism)
+  "sqlmodel>=0.0.22",
+  "alembic>=1.13.0",
+  "asyncpg>=0.29.0",                  # driver async
+  "psycopg[binary]>=3.2.0",           # driver síncrono (usado pelo alembic)
+  "greenlet>=3.0.0",
+
+  # Autenticação
+  "passlib[bcrypt]>=1.7.4",           # hash de senha
+  "pyjwt[crypto]>=2.8.0",             # JWT (assinatura RS256 ou HS256)
+
+  # LLM — camada plugável (replica padrão do prism)
+  "litellm>=1.50.0",                  # roteia Anthropic/OpenAI/Gemini etc.
+  "anthropic>=0.40.0",                # provider padrão
+  "openai>=1.54.0",                   # provider alternativo
+  "httpx>=0.27.0",                    # cliente HTTP (Ollama nativo)
+
+  # Transcrição local
+  "faster-whisper>=1.0.0",
+  "ffmpeg-python>=0.2.0",             # normalização/conversão de áudio
+
+  # Utilitários
+  "orjson>=3.10.0",                   # serialização JSON mais rápida
+  "loguru>=0.7.2",                    # logging
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.6.0",
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.23.0",
+  "httpx>=0.27.0",                    # também usado em testes (TestClient)
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N"]
+ignore = ["E501"]                     # linhas longas — deixa o formatter cuidar
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

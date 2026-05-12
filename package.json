@@ -1,0 +1,40 @@
+{
+  "name": "murmur",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Murmur — monorepo: apps/web (React, roda no host) + apps/api (FastAPI, roda em Docker). Notas pessoais com gravação de áudio, transcrição via faster-whisper e análise via camada LLM plugável.",
+  "workspaces": [
+    "apps/web",
+    "packages/*"
+  ],
+  "scripts": {
+    "//----- frontend (roda no host) -----": "",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "typecheck:web": "npm --workspace apps/web run typecheck",
+
+    "//----- backend (roda em Docker) -----": "",
+    "dev:api": "docker compose up api",
+    "dev:api:detach": "docker compose up -d api",
+    "build:api": "docker compose build api",
+    "logs:api": "docker compose logs -f api",
+    "shell:api": "docker compose exec api bash",
+    "stop:api": "docker compose stop api",
+
+    "//----- stack inteira (api + postgres) -----": "",
+    "up": "docker compose up -d",
+    "down": "docker compose down",
+    "logs": "docker compose logs -f",
+    "ps": "docker compose ps",
+
+    "//----- banco -----": "",
+    "db:up": "docker compose up -d postgres",
+    "db:psql": "docker compose exec postgres psql -U murmur -d murmur",
+    "db:migrate": "docker compose exec api alembic upgrade head",
+    "db:revision": "docker compose exec api alembic revision --autogenerate -m",
+    "db:downgrade": "docker compose exec api alembic downgrade -1"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

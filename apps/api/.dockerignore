@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local data (não vai pra imagem; em dev vem por bind mount)
+storage/
+data/
+
+# Env
+.env
+.env.local
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+
+# Git
+.git/
+.gitignore

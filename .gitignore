@@ -1,0 +1,66 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# Env
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Local data (storage de áudios, banco local, etc.)
+apps/api/storage/
+apps/api/data/
+*.db
+*.db-journal
+
+# Postgres dumps
+*.sql.gz
+*.dump
+
+# Modelos de ML (faster-whisper baixa os pesos em cache).
+# Em dev os pesos ficam no volume nomeado `whisper_models` do compose — fora do repo.
+# Padrão restrito pra não conflitar com `apps/api/src/db/models/` (SQLModel).
+/models/
+*.ckpt
+*.safetensors
+
+# Coverage / tests
+coverage/
+.nyc_output/
+htmlcov/
+.coverage
+
+# Misc
+.cache/
+.DS_Store

@@ -1,0 +1,88 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: murmur-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-murmur}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-murmur_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-murmur}
+    ports:
+      # Exposto no host pra inspeção via DBeaver/psql, mas o api fala via DNS interno (postgres:5432).
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - murmur
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-murmur} -d ${POSTGRES_DB:-murmur}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+      target: dev                       # estágio `dev` do Dockerfile (uvicorn --reload)
+    container_name: murmur-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      APP_PORT: "3001"
+      # Conexão interna ao compose: serviço `postgres` resolve via DNS do Docker.
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-murmur}:${POSTGRES_PASSWORD:-murmur_dev}@postgres:5432/${POSTGRES_DB:-murmur}
+      DATABASE_URL_SYNC: postgresql+psycopg://${POSTGRES_USER:-murmur}:${POSTGRES_PASSWORD:-murmur_dev}@postgres:5432/${POSTGRES_DB:-murmur}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      # Auth
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no .env}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_ACCESS_TTL_MIN: ${JWT_ACCESS_TTL_MIN:-15}
+      JWT_REFRESH_TTL_DAYS: ${JWT_REFRESH_TTL_DAYS:-7}
+      # LLM
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
+      LLM_MODEL: ${LLM_MODEL:-claude-sonnet-4-6}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-}
+      # Transcrição (faster-whisper)
+      WHISPER_MODEL_SIZE: ${WHISPER_MODEL_SIZE:-base}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      WHISPER_LANGUAGE: ${WHISPER_LANGUAGE:-pt}
+      # Cache de modelos do HuggingFace (faster-whisper baixa pra cá)
+      HF_HOME: /cache/huggingface
+      # Armazenamento
+      AUDIO_STORAGE_PATH: /app/storage/audio
+      MAX_AUDIO_SIZE_MB: ${MAX_AUDIO_SIZE_MB:-100}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    volumes:
+      # Bind mount do código pra hot reload — uvicorn --reload pega mudanças do host.
+      - ./apps/api/src:/app/src
+      - ./apps/api/migrations:/app/migrations
+      - ./apps/api/alembic.ini:/app/alembic.ini:ro
+      # Áudios gravados — persistidos no host pra você poder inspecionar.
+      - ./apps/api/storage:/app/storage
+      # Modelos do faster-whisper (alguns GB; volume nomeado evita re-download).
+      - whisper_models:/cache/huggingface
+    networks:
+      - murmur
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3001/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+networks:
+  murmur:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  whisper_models:
