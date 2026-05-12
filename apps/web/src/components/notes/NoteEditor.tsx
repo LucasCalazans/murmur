@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { ArrowLeft, Check, Loader2 } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Trash2 } from 'lucide-react'
 import MDEditor from '@uiw/react-md-editor'
 import { toast } from 'sonner'
 
+import { AudioPlayer } from '@/components/audio/AudioPlayer'
+import { AudioRecorder } from '@/components/audio/AudioRecorder'
+import { AudioUpload } from '@/components/audio/AudioUpload'
+import { TranscriptCard } from '@/components/audio/TranscriptCard'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { useAudioList, useDeleteAudio, useUploadAudio } from '@/hooks/useAudio'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useNote, useUpdateNote } from '@/hooks/useNotes'
 import { cn } from '@/lib/utils'
@@ -99,8 +104,87 @@ export function NoteEditor({ id }: { id: string }) {
           textareaProps={{ placeholder: 'Comece a escrever em markdown…' }}
         />
       </div>
+
+      <NoteAudioSection noteId={id} />
     </div>
   )
+}
+
+function NoteAudioSection({ noteId }: { noteId: string }) {
+  const list = useAudioList(noteId)
+  const upload = useUploadAudio()
+  const remove = useDeleteAudio()
+
+  async function handleRecorded(blob: Blob, mimeType: string) {
+    const ext = mimeType.includes('webm')
+      ? 'webm'
+      : mimeType.includes('mp4')
+      ? 'mp4'
+      : mimeType.includes('ogg')
+      ? 'ogg'
+      : 'audio'
+    try {
+      await upload.mutateAsync({ blob, noteId, filename: `recording.${ext}` })
+      toast.success('Áudio anexado')
+    } catch (e) {
+      toast.error(extractMessage(e))
+    }
+  }
+
+  async function handleUploaded(file: File) {
+    try {
+      await upload.mutateAsync({ blob: file, noteId, filename: file.name })
+      toast.success('Áudio anexado')
+    } catch (e) {
+      toast.error(extractMessage(e))
+    }
+  }
+
+  return (
+    <section className="space-y-3 pt-4 border-t border-zinc-800">
+      <h2 className="text-sm uppercase tracking-wider text-zinc-500">Áudios desta nota</h2>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AudioRecorder onComplete={handleRecorded} disabled={upload.isPending} />
+        <AudioUpload onUpload={handleUploaded} disabled={upload.isPending} />
+      </div>
+      <ul className="space-y-2">
+        {list.data?.items.map((a) => (
+          <li key={a.id} className="rounded-md border border-zinc-800 bg-zinc-900/40 p-3 space-y-2">
+            <div className="flex items-center justify-between text-xs text-zinc-500">
+              <span>
+                {Math.floor(a.duration_seconds / 60)}:
+                {String(Math.floor(a.duration_seconds % 60)).padStart(2, '0')}
+                {' · '}
+                {(a.file_size_bytes / 1024).toFixed(1)} KB
+              </span>
+              <button
+                onClick={async () => {
+                  if (!confirm('Deletar áudio?')) return
+                  await remove.mutateAsync(a.id)
+                }}
+                className="p-1 rounded text-zinc-500 hover:text-red-400 hover:bg-zinc-800"
+                aria-label="Deletar"
+              >
+                <Trash2 size={12} />
+              </button>
+            </div>
+            <AudioPlayer audioId={a.id} />
+            <TranscriptCard audioId={a.id} />
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
+function extractMessage(e: unknown): string {
+  if (typeof e === 'object' && e && 'response' in e) {
+    const detail = (e as { response?: { data?: { detail?: { error?: { message?: string } } } } })
+      .response?.data?.detail?.error?.message
+    if (detail) return detail
+  }
+  if (e instanceof Error) return e.message
+  return 'Falha ao processar'
 }
 
 function SaveIndicator({ status }: { status: Status }) {

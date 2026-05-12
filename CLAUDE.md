@@ -221,72 +221,91 @@ npm run down
 - [x] Typecheck do frontend (`tsc --noEmit`) passa
 - [x] Primeiro commit + push: `feat: bootstrap monorepo murmur (web + api docker)` (54 arquivos, root-commit)
 
-### Fase 1 — Auth via Clerk ⏳ (em andamento — esperando o usuário criar o app na Clerk)
-**Decisão (2026-05-12):** auth gerenciada pela Clerk em vez de implementação própria. Razão: o usuário não quer lidar com segurança em produção. Free tier (Hobby) cobre o uso pessoal com folga (50k MRU/app, apps ilimitadas).
+### Fase 1 — Auth via Clerk ✅
+- Stack: `clerk-backend-api` no backend + `@clerk/clerk-react` no frontend; auth gerenciada (zero código de senha).
+- `core/config.py` (Settings tipado), `core/security.py` (`authenticate_request_async`), `db/session.py` (sqlmodel async).
+- Modelo `User` (clerk_user_id UNIQUE, role enum), migration aplicada.
+- `get_current_user` faz lazy-upsert e promove `OWNER_EMAIL` a `owner`.
+- Frontend: `<ClerkProvider>`, rotas `/sign-in` e `/sign-up`, `useApi()` injetando Bearer JWT.
+- Validado ponta a ponta (signup pela UI → `/auth/me` retorna o user com role correta).
+- Pendente (parking lot): webhook `user.deleted` (precisa de túnel pra dev).
 
-Implementação:
-- [x] `core/config.py` (Settings com pydantic-settings — Clerk, DB, LLM, Whisper)
-- [x] `core/security.py` (`authenticate()` via `clerk_backend_api.authenticate_request_async`)
-- [x] `db/session.py` (AsyncEngine + sessionmaker)
-- [x] `db/models/user.py` (`User`: id, clerk_user_id UNIQUE, email, role, ts; enum `UserRole`)
-- [x] `migrations/env.py` puxa `SQLModel.metadata`; `script.py.mako` agora inclui `import sqlmodel`
-- [x] Migration `5759fdf77f11_init_users` aplicada (tabela `users` + índices)
-- [x] `api/deps.py` (`get_db`, `get_clerk_identity`, `get_current_user` com lazy-upsert, `require_role(*roles)`)
-- [x] `api/routes/auth.py` (`GET /auth/me`)
-- [x] `main.py` plugando router e validando config no boot
-- [x] Frontend: `@clerk/clerk-react` instalado; `<ClerkProvider>` em `main.tsx`; rotas `/sign-in` e `/sign-up`; `<UserButton>` no header; `useApi()` hook em `lib/api.ts` que injeta Bearer JWT
-- [ ] **Usuário precisa criar app na Clerk e preencher chaves** (passos detalhados em "Próximo chat" abaixo)
-- [ ] Smoke test ponta a ponta: signup pela UI → `/auth/me` retorna `User` com role correta
-- [ ] Webhook `user.deleted` (sync) — adiar pra Fase 1.1 (precisa de túnel pra dev)
+### Fase 2 — Plataforma: LLM (estrutura) + Observabilidade ✅
+LLM (portado do `prism`):
+- `services/llm/{__init__,client,config,exceptions}.py` — `llm_client.complete()` provider-agnostic (Anthropic, OpenAI via LiteLLM; Ollama via httpx).
+- `SUPPORTED_PROVIDERS = (anthropic, openai, ollama)`, `validate_llm_config()` no boot (silencioso em dev sem chaves).
+- `LLMResponse` normalizado com `LLMUsage`. Retry com backoff + retry-after.
+- Endpoint `GET /debug/llm` em dev (protegido por auth) — smoke test do provider configurado.
+- **Não integra com notas ainda — só infra.**
 
-### Fase 2 — Camada LLM
-- [ ] Portar `services/llm/{client,config,exceptions}.py` do prism
-- [ ] Validação no startup do FastAPI
-- [ ] Smoke test: `POST /debug/llm` (apenas em dev) para validar configuração
+Logging (`core/logging.py`):
+- loguru com output JSON estruturado em `/app/logs/api.log` (bind mount no host).
+- `RequestLoggingMiddleware`: gera/usa `X-Request-Id`, mede `duration_ms`, loga path/method/status.
+- `contextvars` propagam `request_id` e `user_id` em todo log emitido durante uma request.
+- Hijack do logging stdlib — uvicorn/sqlalchemy/etc. caem no mesmo pipeline JSON.
+- Rotação diária + retenção 14d + compressão gz.
 
-### Fase 3 — Frontend: shell + app
-*(Auth UI já entrou na Fase 1 via `@clerk/clerk-react` — `<SignIn/>`, `<SignUp/>`, `<UserButton/>`).*
-- [ ] Componentes UI primitivos (Button, Input, Card, Dialog) na pasta `components/ui/`
-- [ ] Layout autenticado (sidebar + topbar) — usar `<SignedIn>` e `useUser()` da Clerk pra exibir info
-- [ ] `ProtectedRoute` baseado em `<SignedIn/>` (redireciona pra `/sign-in` se não logado)
-- [ ] Página Dashboard (placeholder) com link pras notas (Fase 4)
+### Fase 3 — Frontend: shell + UI primitives ✅
+- `components/ui/`: Button, Input, Card, Dialog, Skeleton, Textarea (Tailwind, sem shadcn).
+- `components/layout/AppShell`: sidebar (Dashboard, Notas, Áudios, Settings) + topbar com `<UserButton/>` e email do usuário.
+- `components/auth/ProtectedRoute`: gate via `<SignedIn/>` com loading skeleton.
+- `App.tsx` reestruturado: rotas públicas (sign-in/sign-up) vs protegidas (AppShell).
+- Páginas: Dashboard, Notes, Audio, Settings.
+- `lib/utils.ts` com `cn()` (clsx + tailwind-merge).
 
-### Fase 4 — Notas (CRUD)
-- [ ] Modelo `Note` (id, owner_id, title, content, tags, timestamps)
-- [ ] Endpoints REST `/notes`
-- [ ] Frontend: lista + editor (textarea, markdown depois)
-- [ ] Busca simples (`ILIKE`)
+### Fase 4 — Notas markdown ✅
+- Backend:
+  - `db/models/note.py` (owner_id FK CASCADE, title, content TEXT markdown, tags `text[]`).
+  - `api/routes/notes.py`: GET (busca `?q` ILIKE, filtro `?tag`, `?sort`/`?order`, paginação), POST/GET/PATCH/DELETE.
+  - Permissões: `editor` vê só as suas; `owner` vê todas; `viewer` não cria.
+- Frontend:
+  - `@uiw/react-md-editor` (preview side-by-side).
+  - `hooks/useNotes` (react-query: list/get/create/update/delete), `hooks/useDebounce`.
+  - `pages/Notes` lista + busca debounced 300ms + delete inline.
+  - `components/notes/NoteEditor`: title + tags + MDEditor + autosave debounced 800ms + indicador "salvando/salvo".
 
-### Fase 5 — Gravação de áudio
-- [ ] `AudioRecorder` (MediaRecorder + canvas waveform + timer)
-- [ ] Upload via `POST /audio` (multipart)
-- [ ] Armazenamento em `apps/api/storage/audio/{user_id}/{audio_id}.{ext}`
-- [ ] Modelo `AudioRecording` (id, user_id, note_id?, file_path, duration, mime_type, ts)
-- [ ] `AudioPlayer` no frontend
+### Fase 5 — Áudio (gravação + upload + WAV) ✅
+- Backend:
+  - `db/models/audio.py` (`AudioRecording`: user_id FK, note_id FK SET NULL, file_path relativo, duração, formato original, mime, bytes).
+  - `services/audio/conversion.py`: ffmpeg → WAV 16kHz mono PCM s16le; `ffprobe` pra metadados (duração, sample rate, canais).
+  - `api/routes/audio.py`: POST `/audio` (multipart, opcional `note_id`), GET list (filtrável por note), GET metadata, GET `/file` (stream), DELETE.
+  - Storage: `apps/api/storage/audio/{user_id}/{audio_id}.wav` (bind mount).
+  - Limites: `MAX_AUDIO_SIZE_MB` (default 100) e 30 minutos de duração.
+- Frontend:
+  - `components/audio/AudioRecorder` (MediaRecorder + canvas waveform realtime + timer + start/stop).
+  - `components/audio/AudioUpload` (drag&drop, aceita wav/mp3/m4a/webm/ogg/flac/mp4).
+  - `components/audio/AudioPlayer` (fetch com Bearer → blob URL → `<audio>`).
+  - Página `/audio` standalone + seção "Áudios desta nota" no `NoteEditor`.
 
-### Fase 6 — Transcrição local (faster-whisper)
-- [ ] `services/transcription/whisper.py` wrapper
-- [ ] Config: model size (`tiny`/`base`/`small`/`medium`/`large-v3`), device (`cpu`/`cuda`), compute_type
-- [ ] Endpoint `POST /audio/{id}/transcribe` (executa em BackgroundTask)
-- [ ] Modelo `Transcript` (id, audio_id, text, segments JSON, language, model, ts)
-- [ ] Frontend: indicador de progresso + exibição da transcrição
-- [ ] Edição manual da transcrição (correção humana)
+### Fase 6 — Transcrição async (faster-whisper) ✅
+- Backend:
+  - `services/transcription/whisper.py`: wrapper com lazy load do modelo (no primeiro uso, não no boot).
+  - `db/models/transcript.py`: `Transcript` (audio_id UNIQUE FK CASCADE, status enum `pending|running|done|failed`, text, segments JSONB, language, model_size, error_message, started_at, completed_at).
+  - `POST /audio/{id}/transcribe` → 202, cria Transcript(pending), enfileira `BackgroundTask`. Idempotente em pending/running; reexecuta a partir de done/failed.
+  - `GET /audio/{id}/transcript`, `GET /transcripts/{id}`, `PATCH /transcripts/{id}` (edição manual; só com status=done).
+- Frontend:
+  - `hooks/useTranscript` com `refetchInterval: 2000` enquanto pending/running.
+  - `components/audio/TranscriptCard`: estado → botão "Transcrever" / spinner / textarea editável com autosave / erro + retry.
+  - Plugado no Audio page e no NoteEditor (cada áudio mostra seu card).
 
-### Fase 7 — Análise semântica e personalização
-- [ ] `services/analysis/pipeline.py` usando `llm_client.complete(...)`
-- [ ] Extrai: resumo, tópicos, action items, sentimento, entidades
-- [ ] Modelo `Analysis` (id, transcript_id, summary, topics, action_items, sentiment, ts)
-- [ ] **Perfil do usuário** acumulado: `UserProfile` com interesses, padrões, decisões — atualizado a cada nova análise
-- [ ] UI estilo chat onde a aplicação responde levando em conta o perfil
+### Fase 7 (parking lot) — Análise semântica via LLM
+- Pipeline `services/analysis/pipeline.py` usando `llm_client.complete(...)`.
+- Resumo, tópicos, action items, sentimento, entidades.
+- `UserProfile` acumulado.
+- UI estilo chat levando perfil em conta.
 
-### Fase 8+ — Parking lot
-- Tags automáticas via análise
-- Busca semântica (embeddings + `pgvector`)
-- PWA + atalho global pra iniciar gravação
-- Export markdown / PDF
-- Compartilhamento via link público
-- App mobile (Tauri ou React Native)
-- Modo offline com sync
+### Parking lot
+- Webhook Clerk `user.deleted` (sync local).
+- Tags com tabela própria + autocomplete + sugestão automática.
+- Busca semântica (`pgvector` + embeddings).
+- PWA + atalho global pra gravar.
+- Export markdown/PDF.
+- Compartilhamento via link público (NoteShare).
+- App mobile (Tauri / RN).
+- Modo offline com sync.
+- Sentry (quando virar produção).
+- Página de admin (listar usuários/notas).
+- Backup automatizado do Postgres.
 
 ---
 

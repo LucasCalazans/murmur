@@ -66,3 +66,6 @@ htmlcov/
 # Misc
 .cache/
 .DS_Store
+
+# Tests
+screenshots/
