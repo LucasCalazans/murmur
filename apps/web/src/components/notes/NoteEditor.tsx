@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ArrowLeft, Check, Loader2, Trash2 } from 'lucide-react'
-import MDEditor from '@uiw/react-md-editor'
 import { toast } from 'sonner'
 
 import { AudioPlayer } from '@/components/audio/AudioPlayer'
 import { AudioRecorder } from '@/components/audio/AudioRecorder'
 import { AudioUpload } from '@/components/audio/AudioUpload'
 import { TranscriptCard } from '@/components/audio/TranscriptCard'
+import { MarkdownEditor } from '@/components/notes/MarkdownEditor'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -95,15 +95,8 @@ export function NoteEditor({ id }: { id: string }) {
         className="text-xs"
       />
 
-      <div data-color-mode="dark">
-        <MDEditor
-          value={content}
-          onChange={(v) => setContent(v ?? '')}
-          height={500}
-          preview="live"
-          textareaProps={{ placeholder: 'Comece a escrever em markdown…' }}
-        />
-      </div>
+      <MarkdownEditor value={content} onChange={setContent} />
+
 
       <NoteAudioSection noteId={id} />
     </div>
