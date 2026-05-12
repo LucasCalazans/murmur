@@ -200,27 +200,27 @@ npm run down
 
 ## Roadmap
 
-### Fase 0 — Estrutura inicial ⏳ (em andamento)
+### Fase 0 — Estrutura inicial ✅ (concluída em 2026-05-12)
 - [x] Estrutura monorepo (`apps/web`, `apps/api`, `packages/`)
 - [x] `docker-compose.yml` com **postgres + api** (backend em Docker, frontend no host)
 - [x] `apps/api/Dockerfile` (multi-stage: base → deps → dev / prod)
 - [x] `apps/api/.dockerignore`
 - [x] `package.json` raiz com workspaces e scripts unificados (`dev:api`, `db:migrate`, `logs:api`, `shell:api` etc.)
-- [x] `apps/web/package.json` (deps frontend — aguardando aprovação final)
-- [x] `apps/api/pyproject.toml` (deps backend — aguardando aprovação final)
+- [x] `apps/web/package.json` (deps frontend)
+- [x] `apps/api/pyproject.toml` (deps backend)
 - [x] `.env.example` na raiz (consumido pelo docker-compose)
-- [x] `.gitignore` ajustado (Python + node + storage local)
-- [x] **Nome do projeto definido: Murmur** (renomeado de "audio-to-notes" em tudo)
-- [x] CLAUDE.md atualizado com workflow Docker
-- [ ] **Renomear pasta local** `audio-to-notes/` → `murmur/` *(usuário vai fazer manualmente)*
-- [ ] Aprovação final das dependências
-- [ ] `git init` + `git remote add origin git@github.com:LucasCalazans/murmur.git` + primeiro commit
-- [ ] Configs faltando:
-  - `apps/web/`: `vite.config.ts`, `tsconfig.json`, `tailwind.config.js`, `postcss.config.js`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/styles/globals.css`, `apps/web/.env.example`
-  - `apps/api/`: `alembic.ini`, `apps/api/.env.example`, `src/main.py` mínimo (FastAPI + `/health`)
-  - Raiz: `tsconfig.base.json` (opcional, p/ shared-types depois)
-- [ ] Build inicial: `docker compose build api` + `npm install`
-- [ ] Smoke test: `docker compose up -d` → curl `http://localhost:3001/health` → 200 OK
+- [x] `.gitignore` ajustado (Python + node + storage local; `models/` agora é `/models/` para não conflitar com `apps/api/src/db/models/`)
+- [x] **Nome do projeto definido: Murmur**
+- [x] **Pasta local renomeada** para `murmur/`
+- [x] `git init` + branch `main` + `git remote add origin git@github.com:LucasCalazans/murmur.git`
+- [x] Configs do frontend: `vite.config.ts`, `tsconfig.json`, `tsconfig.node.json`, `tailwind.config.js`, `postcss.config.js`, `index.html`, `src/main.tsx`, `src/App.tsx`, `src/styles/globals.css`, `src/vite-env.d.ts`, `.eslintrc.cjs`, `.env.example`
+- [x] Configs do backend: `alembic.ini`, `migrations/env.py`, `migrations/script.py.mako`, `apps/api/.env.example`, `src/main.py` (FastAPI + `/health`)
+- [x] `__init__.py` em toda árvore de pacotes Python
+- [x] Build inicial: `docker compose build api` + `npm install`
+- [x] Smoke test: `curl http://localhost:3001/health` → `{"status":"ok","service":"murmur-api","env":"development"}`
+- [x] Typecheck do frontend (`tsc --noEmit`) passa
+- [x] Primeiro commit: `feat: bootstrap monorepo murmur (web + api docker)` (54 arquivos, root-commit)
+- [ ] **Push ainda não foi feito** — `git push -u origin main` quando o usuário quiser
 
 ### Fase 1 — Backend: bootstrap + auth
 - [ ] `main.py` (FastAPI app + CORS + error handlers)
@@ -352,64 +352,66 @@ VITE_API_URL=http://localhost:3001
 
 - **Última atualização:** 2026-05-12
 - **Nome do projeto:** **Murmur**
-- **Repo remoto:** `git@github.com:LucasCalazans/murmur.git` (ainda não conectado localmente — `git init` pendente)
-- **Fase ativa:** Fase 0 — Estrutura inicial
+- **Repo remoto:** `git@github.com:LucasCalazans/murmur.git` — conectado, commit local criado, **push pendente** (root-commit `feat: bootstrap monorepo murmur (web + api docker)`).
+- **Fase ativa:** Fase 0 ✅ concluída → próxima é **Fase 1 (auth + permissões)**.
+- **Portas em uso no host (dev):**
+  - `5173` — Vite (frontend)
+  - `3001` — FastAPI (no container `murmur-api`)
+  - `5433` — Postgres (no container `murmur-postgres`) — `5432` está ocupado por outro container (`youtube-shorts-postgres`), por isso o host port foi remapeado pra **5433** no `.env`. Conexão de dentro do compose continua em `postgres:5432`.
 
-### O que já foi feito nesta sessão
-1. Estrutura monorepo criada (`apps/web`, `apps/api`, `packages/shared-types`).
-2. Backend definido em **Python/FastAPI** (alinhado com prism) rodando em **Docker**; frontend **React/Vite** no host.
-3. Banco trocado pra **Postgres 16** via docker-compose.
-4. Transcrição definida com **faster-whisper** (local, sem custo de API).
-5. **Camada LLM plugável** especificada — vai ser portada de `~/projects/prism/backend/src/services/llm/`.
-6. Dockerfile multi-stage do backend (`base → deps → dev/prod`) com ffmpeg + libgomp1.
-7. docker-compose com **postgres + api** numa network `murmur`, volumes pra storage e cache de modelos.
-8. Scripts unificados na raiz (`npm run dev:api`, `npm run dev:web`, `npm run db:migrate`, etc.).
-9. Todos os nomes renomeados de "audio-to-notes" pra "murmur" em 5 arquivos.
+### O que foi feito nesta sessão (2026-05-12, segunda rodada)
+1. **Git inicializado** + branch `main` + remote `origin` apontando pro GitHub.
+2. **Configs do frontend criados:** Vite, Tailwind, TypeScript (com `tsconfig.node.json`), ESLint, PostCSS, `index.html`, `main.tsx`, `App.tsx` com fetch do `/health`, `globals.css`, `vite-env.d.ts`, `.env.example`.
+3. **Configs do backend criados:** `alembic.ini`, `migrations/env.py` (lê `DATABASE_URL_SYNC` do ambiente, `target_metadata = None` por enquanto), `migrations/script.py.mako`, `apps/api/.env.example`, `src/main.py` (FastAPI minimal com CORS + `/health`).
+4. **`__init__.py`** em toda árvore de pacotes Python (`src/{api,api/routes,core,db,db/models,middleware,schemas,services,services/{llm,auth,transcription,analysis},utils}`).
+5. **`.gitkeep`** em todas as pastas vazias do frontend (components, pages, hooks, lib, contexts, types, routes, styles).
+6. **`.gitignore` ajustado** — `models/` virou `/models/` para não capturar `apps/api/src/db/models/`. Adicionado `*.ckpt`, `*.safetensors`.
+7. **Postgres realocado pro host port 5433** (`5432` ocupado por outro projeto local).
+8. **`.env` real criado** a partir do `.env.example` com `JWT_SECRET` gerado via `openssl rand -hex 32`.
+9. **`docker compose build api`** ✅ (Python 3.11 slim + ffmpeg + libgomp1; instalou TODAS as deps incluindo faster-whisper, anthropic, openai, litellm, sqlmodel, alembic, asyncpg, psycopg, passlib[bcrypt], pyjwt).
+10. **`docker compose up -d`** ✅ — postgres e api healthy.
+11. **Smoke test:** `curl http://localhost:3001/health` → `{"status":"ok","service":"murmur-api","env":"development"}`.
+12. **`npm install`** rodou no host (285 packages, alguns warnings de deprecação no eslint v8 e glob — sem impacto agora).
+13. **`tsc --noEmit`** do frontend passa (sem erros).
+14. **Primeiro commit feito** (root-commit, 54 arquivos). **Push ainda não foi feito**.
 
 ### 🎯 Próximo chat — comece exatamente daqui
 
-**1. Confirmar que o rename da pasta foi feito.**
-   - Pasta local agora deve ser `~/projects/murmur/` (o usuário ia fazer `mv` manualmente).
-   - Se ainda estiver em `audio-to-notes/`, confirmar com o usuário antes de prosseguir.
-
-**2. Inicializar git e conectar ao remote:**
+**1. (Opcional) Fazer o push pro GitHub:**
    ```bash
    cd ~/projects/murmur
-   git init
-   git branch -M main
-   git remote add origin git@github.com:LucasCalazans/murmur.git
-   ```
-   *(NÃO commitar ainda — falta criar os configs e o `main.py` mínimo pra que o primeiro commit já tenha um backend funcional.)*
-
-**3. Validar deps com o usuário** (uma última vez antes de buildar):
-   - `apps/web/package.json` — stack React/Vite/Tailwind/RHF/Zod
-   - `apps/api/pyproject.toml` — FastAPI/SQLModel/asyncpg/LiteLLM/faster-whisper
-
-**4. Criar configs faltando** (lista completa no checklist da Fase 0 acima). Itens críticos pra o backend subir:
-   - `apps/api/src/main.py` — FastAPI mínimo com `/health` (sem auth ainda)
-   - `apps/api/alembic.ini` + `apps/api/migrations/env.py`
-   - `apps/api/.env.example` (variáveis específicas da api)
-
-**5. Subir e validar:**
-   ```bash
-   cp .env.example .env          # editar JWT_SECRET e ANTHROPIC_API_KEY
-   docker compose build api      # build inicial (puxa Python 3.11 + ffmpeg)
-   docker compose up -d
-   curl http://localhost:3001/health   # esperar 200 OK
-   ```
-
-**6. Primeiro commit + push:**
-   ```bash
-   git add -A
-   git commit -m "feat: bootstrap monorepo murmur (web + api docker)"
    git push -u origin main
    ```
+   Confirmar com o usuário se ele quer que o repo já fique público. Não rodar sem aprovação explícita.
 
-**7. Só depois disso → entrar na Fase 1 (auth + permissões).**
+**2. Entrar na Fase 1 — backend: bootstrap + auth.**
+
+Ordem sugerida:
+   1. `src/core/config.py` — `Settings` com `pydantic-settings` (carrega tudo do ambiente: DB, JWT, LLM, Whisper).
+   2. `src/core/security.py` — hash de senha (passlib/bcrypt) + emissão/validação de JWT (pyjwt, HS256, access+refresh).
+   3. `src/db/session.py` — `AsyncEngine` + `async_sessionmaker[AsyncSession]` lendo `DATABASE_URL`.
+   4. `src/db/models/user.py` (`User`: id, email, password_hash, role, ts), `refresh_token.py`, `note_share.py` (mesmo que ainda não tenha `Note` — placeholder pra schema da tabela).
+   5. **Atualizar `migrations/env.py`** para importar `SQLModel.metadata` (`from src.db.models import *` + `target_metadata = SQLModel.metadata`).
+   6. `alembic revision --autogenerate -m "init users"` (via `npm run db:revision`).
+   7. `npm run db:migrate`.
+   8. `src/api/deps.py` — `get_db`, `get_current_user`, `require_role(*roles)`.
+   9. `src/api/routes/auth.py` — `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `POST /auth/logout`, `GET /auth/me`.
+   10. Plugar rotas no `main.py` via `app.include_router(...)`.
+   11. **Seed do usuário owner** (eu): script Python ou endpoint de admin protegido por env var, criando `calazans95@hotmail.com` com role `owner`.
+
+**3. Validar a fase 1 com smoke tests:**
+   - `POST /auth/register` cria usuário, retorna 201.
+   - `POST /auth/login` retorna access+refresh.
+   - `GET /auth/me` com bearer token retorna o usuário.
+   - `POST /auth/refresh` rotaciona refresh, invalida o antigo.
+   - 401 quando token faltando/expirado.
 
 ### ⚠️ Avisos para o próximo chat
 - **Não rodar `pip install` no host** — backend roda em Docker. Toda dep Python vai no `pyproject.toml` e instala no build da imagem.
 - **`npm install` na raiz** — instala só o workspace `apps/web` (o `apps/api` não é workspace npm).
-- **Camada LLM:** quando chegar na Fase 2, abrir `~/projects/prism/backend/src/services/llm/{__init__,client,config,exceptions}.py` e portar **mantendo o padrão** (singleton `llm_client`, `LLMClient.complete()`, `SUPPORTED_PROVIDERS`, exceções próprias, validação no boot). NÃO reescrever do zero.
-- **Modelo Anthropic padrão:** `claude-sonnet-4-6` (referência: cutoff Jan/2026, é o atual no momento desta sessão).
-- **Hot reload do backend:** vem por bind mount do `apps/api/src/` — não precisa rebuildar a imagem a cada mudança Python.
+- **Postgres está em `localhost:5433` no host** (mas em `postgres:5432` dentro da network do compose). Se for criar `.env` para rodar a api fora do container (não recomendado em dev), usar `localhost:5433`.
+- **Camada LLM (Fase 2):** abrir `~/projects/prism/backend/src/services/llm/{__init__,client,config,exceptions}.py` e portar **mantendo o padrão** (singleton `llm_client`, `LLMClient.complete()`, `SUPPORTED_PROVIDERS`, exceções próprias, validação no boot). NÃO reescrever do zero.
+- **Modelo Anthropic padrão:** `claude-sonnet-4-6` (cutoff Jan/2026).
+- **Hot reload do backend:** vem por bind mount do `apps/api/src/` — uvicorn `--reload` pega mudanças do host sem rebuild.
+- **`default_response_class=ORJSONResponse` está deprecado** em FastAPI 0.136 (Pydantic já serializa via orjson direto). Por isso `main.py` não usa.
+- **Em deprecation warnings do npm:** eslint v8 (`apps/web/package.json`) está EOL. Não urgente mas considerar v9+ depois.
