@@ -69,6 +69,8 @@ services:
       - ./apps/api/alembic.ini:/app/alembic.ini:ro
       # Áudios gravados — persistidos no host pra você poder inspecionar.
       - ./apps/api/storage:/app/storage
+      # Logs estruturados (JSON por linha) — bind no host pra inspecionar com jq.
+      - ./apps/api/logs:/app/logs
       # Modelos do faster-whisper (alguns GB; volume nomeado evita re-download).
       - whisper_models:/cache/huggingface
     networks:

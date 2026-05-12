@@ -13,6 +13,7 @@ from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from src.core.config import Settings, get_settings
+from src.core.logging import bind_user_id
 from src.core.security import ClerkIdentity, authenticate
 from src.db.models.user import User, UserRole
 from src.db.session import SessionLocal
@@ -45,6 +46,7 @@ async def get_current_user(
     user = result.first()
 
     if user is not None:
+        bind_user_id(str(user.id))
         return user
 
     # Lazy-create. Sem email no token (template padrão), fica vazio até webhook chegar.
@@ -67,6 +69,7 @@ async def get_current_user(
             detail={"error": {"code": "user_provision_failed", "message": str(exc)}},
         ) from exc
 
+    bind_user_id(str(user.id))
     return user
 
 

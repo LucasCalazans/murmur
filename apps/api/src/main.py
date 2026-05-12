@@ -1,20 +1,27 @@
-"""Murmur API — entrypoint FastAPI.
-
-Fase 1: auth gerenciada pela Clerk. As rotas de `/auth/*` validam o session token
-emitido no frontend e fazem upsert do usuário local na primeira chamada.
-"""
+"""Murmur API — entrypoint FastAPI."""
 from __future__ import annotations
+
+from contextlib import suppress
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.api.routes import auth as auth_routes
+from src.api.routes import debug as debug_routes
 from src.core.config import get_settings, validate_clerk_config
+from src.core.logging import init_logging, install_request_logging
+from src.services.llm import LLMConfigError, validate_llm_config
 
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    init_logging(settings)
     validate_clerk_config(settings)
+
+    # LLM config: validar quando provider tem chave/url definida.
+    # Em dev sem chave, só registra warning — `/debug/llm` retorna 503 quando chamado.
+    with suppress(LLMConfigError):
+        validate_llm_config(settings)
 
     app = FastAPI(
         title="Murmur API",
@@ -27,9 +34,14 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["X-Request-Id"],
     )
 
+    install_request_logging(app)
+
     app.include_router(auth_routes.router)
+    if settings.app_env != "production":
+        app.include_router(debug_routes.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

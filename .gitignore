@@ -41,6 +41,8 @@ venv/
 # Local data (storage de áudios, banco local, etc.)
 apps/api/storage/
 apps/api/data/
+apps/api/logs/*
+!apps/api/logs/.gitkeep
 *.db
 *.db-journal
 
